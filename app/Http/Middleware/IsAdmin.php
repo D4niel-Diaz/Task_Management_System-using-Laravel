@@ -10,10 +10,9 @@ class IsAdmin
 {
     public function handle(Request $request, Closure $next): Response
     {
-        // Check if the authenticated user is an admin
         $user = $request->user();
 
-        if (!$user || !$user->isAdmin()) {
+        if (!$user || $user->role !== 'admin') {
             return redirect()->route('dashboard')
                 ->with('error', 'Access denied. Admins only.');
         }
