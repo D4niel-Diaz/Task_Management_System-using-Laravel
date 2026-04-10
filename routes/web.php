@@ -4,6 +4,7 @@ use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\AuthController;
 use App\Http\Controllers\DashboardController;
 use App\Http\Controllers\TaskController;
+use App\Http\Controllers\FileController;
 
 // Root URL redirect
 Route::get('/', function () {
@@ -23,16 +24,22 @@ Route::middleware('auth')->group(function () {
     Route::post('/logout', [AuthController::class, 'logout'])->name('logout');
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
-    // Task routes
+    // Task list
     Route::get('/tasks', [TaskController::class, 'index'])->name('tasks.index');
-    Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
-    Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
 
-    // Admin only task routes
+    // ✅ Admin only routes FIRST (before {task} wildcard)
     Route::middleware('is_admin')->group(function () {
         Route::get('/tasks/create', [TaskController::class, 'create'])->name('tasks.create');
         Route::post('/tasks', [TaskController::class, 'store'])->name('tasks.store');
         Route::get('/tasks/{task}/edit', [TaskController::class, 'edit'])->name('tasks.edit');
         Route::delete('/tasks/{task}', [TaskController::class, 'destroy'])->name('tasks.destroy');
     });
+
+    // ✅ Wildcard {task} routes AFTER static routes
+    Route::get('/tasks/{task}', [TaskController::class, 'show'])->name('tasks.show');
+    Route::put('/tasks/{task}', [TaskController::class, 'update'])->name('tasks.update');
+
+    // File routes
+    Route::post('/tasks/{task}/upload', [FileController::class, 'upload'])->name('tasks.files.upload');
+    Route::get('/tasks/{task}/files/{file}', [FileController::class, 'download'])->name('tasks.files.download');
 });

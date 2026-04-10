@@ -64,18 +64,54 @@
         </div>
         @endif
 
-        {{-- File Attachments --}}
+        <hr>
+
+        {{-- File Upload Form --}}
+        @if(Auth::user()->role === 'admin' || $task->assigned_to === Auth::id())
         <div class="mb-4">
-            <h6 class="fw-semibold mb-2">File Attachments</h6>
+            <h6 class="fw-semibold mb-3">Upload File</h6>
+            <form method="POST"
+                  action="{{ route('tasks.files.upload', $task->id) }}"
+                  enctype="multipart/form-data">
+                @csrf
+                <div class="d-flex gap-2 align-items-center">
+                    <input type="file"
+                           name="file"
+                           class="form-control @error('file') is-invalid @enderror"
+                           accept=".pdf,.jpg,.jpeg,.png,.docx,.xlsx">
+                    <button type="submit" class="btn btn-success btn-sm text-nowrap">
+                        <i class="bi bi-upload me-1"></i> Upload
+                    </button>
+                </div>
+                @error('file')
+                    <div class="text-danger small mt-1">{{ $message }}</div>
+                @enderror
+                <small class="text-muted mt-1 d-block">
+                    Allowed: PDF, JPG, PNG, DOCX, XLSX — Max 5MB
+                </small>
+            </form>
+        </div>
+        @endif
+
+        {{-- File Attachments List --}}
+        <div class="mb-4">
+            <h6 class="fw-semibold mb-2">
+                <i class="bi bi-paperclip me-1"></i> Attachments
+                <span class="badge bg-secondary ms-1">{{ $task->files->count() }}</span>
+            </h6>
             @forelse($task->files as $file)
-                <div class="d-flex align-items-center gap-2 mb-1">
-                    <i class="bi bi-paperclip"></i>
-                    <a href="{{ route('tasks.files.download', [$task->id, $file->id]) }}">
+                <div class="d-flex align-items-center gap-2 mb-2 p-2 bg-light rounded">
+                    <i class="bi bi-file-earmark text-primary"></i>
+                    <a href="{{ route('tasks.files.download', [$task->id, $file->id]) }}"
+                       class="text-decoration-none">
                         {{ basename($file->file_path) }}
                     </a>
+                    <span class="text-muted small ms-auto">
+                        {{ $file->created_at->format('M d, Y') }}
+                    </span>
                 </div>
             @empty
-                <p class="text-muted small">No files attached.</p>
+                <p class="text-muted small">No files attached yet.</p>
             @endforelse
         </div>
 
