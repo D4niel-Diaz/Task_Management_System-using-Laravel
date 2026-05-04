@@ -1,31 +1,27 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\TaskFile;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Storage;
 
-class FileController extends Controller
+class TaskFileController extends Controller
 {
     /**
+     * POST /api/tasks/{task}/files
      * Upload a file to a task.
      */
-    public function upload(Request $request, Task $task)
+    public function store(Request $request, Task $task)
     {
-        // Only admin or the assigned user can upload to this task
-        $user = Auth::user();
-        if ($user->role !== 'admin' && (int) $task->assigned_to !== (int) $user->id) {
-            return back()->with('error', 'You do not have permission to upload files to this task.');
-        }
-
         $request->validate([
             'file' => [
                 'required',
                 'file',
-                'max:10240', // 10MB
+                'max:10240',
                 'mimes:jpg,jpeg,png,gif,pdf,doc,docx,xls,xlsx,txt,zip,rar,csv',
             ],
         ]);
@@ -35,10 +31,9 @@ class FileController extends Controller
         $mimeType     = $file->getMimeType();
         $size         = $file->getSize();
 
-        // Store file in storage/app/task_files/{task_id}/
         $path = $file->store("task_files/{$task->id}", 'local');
 
-        TaskFile::create([
+        $taskFile = TaskFile::create([
             'task_id'       => $task->id,
             'file_path'     => $path,
             'original_name' => $originalName,
@@ -47,52 +42,58 @@ class FileController extends Controller
             'uploaded_by'   => Auth::id(),
         ]);
 
-        return back()->with('success', "File \"{$originalName}\" uploaded successfully.");
+        return response()->json([
+            'success' => true,
+            'message' => 'File uploaded successfully.',
+            'data'    => $taskFile,
+        ], 201);
     }
 
     /**
+     * GET /api/tasks/{task}/files/{file}
      * Download a file.
      */
     public function download(Task $task, TaskFile $file)
     {
-        // Ensure the file belongs to this task
-        abort_if($file->task_id !== $task->id, 404);
-
-        // Only admin or the assigned user can download
-        $user = Auth::user();
-        if ($user->role !== 'admin' && (int) $task->assigned_to !== (int) $user->id) {
-            abort(403, 'You do not have permission to download files from this task.');
-        }
+        abort_if($file->task_id !== $task->id, 404, 'File not found.');
 
         if (!Storage::disk('local')->exists($file->file_path)) {
-            return back()->with('error', 'File not found on server.');
+            return response()->json([
+                'success' => false,
+                'message' => 'File not found on server.',
+            ], 404);
         }
 
         return Storage::disk('local')->download($file->file_path, $file->original_name);
     }
 
     /**
-     * Delete a file (admin only or uploader).
+     * DELETE /api/tasks/{task}/files/{file}
+     * Delete a file.
      */
     public function destroy(Task $task, TaskFile $file)
     {
-        abort_if($file->task_id !== $task->id, 404);
+        abort_if($file->task_id !== $task->id, 404, 'File not found.');
 
+        /** @var \App\Models\User $user */
         $user = Auth::user();
 
-        // Only admin or the uploader can delete
         if ($user->role !== 'admin' && $file->uploaded_by !== $user->id) {
-            return back()->with('error', 'You do not have permission to delete this file.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied.',
+            ], 403);
         }
 
-        // Delete physical file
         if (Storage::disk('local')->exists($file->file_path)) {
             Storage::disk('local')->delete($file->file_path);
         }
 
-        $name = $file->original_name;
         $file->delete();
 
-        return back()->with('success', "File \"{$name}\" deleted.");
+        return response()->json([
+            'success' => true,
+            'message' => 'File deleted successfully.',
+        ]);
     }
 }
