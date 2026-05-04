@@ -1,7 +1,8 @@
 <?php
 
-namespace App\Http\Controllers;
+namespace App\Http\Controllers\Api;
 
+use App\Http\Controllers\Controller;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\TaskAssigned;
@@ -11,116 +12,111 @@ use Illuminate\Support\Facades\Auth;
 class TaskController extends Controller
 {
     /**
-     * Display a listing of tasks.
+     * GET /api/tasks
+     * List all tasks (admin) or assigned tasks (user).
      */
     public function index(Request $request)
     {
         /** @var User $user */
         $user = Auth::user();
 
-        $query = Task::with(['assignedTo', 'createdBy', 'files']);
+        $query = Task::with(['assignedTo:id,name,email', 'createdBy:id,name,email']);
 
-        // Admin sees all tasks; regular users see only their assigned tasks
         if ($user->role !== 'admin') {
             $query->where('assigned_to', $user->id);
         }
 
-        // Filter by status
         if ($request->filled('status')) {
             $query->where('status', $request->status);
         }
 
-        // Filter by priority
         if ($request->filled('priority')) {
             $query->where('priority', $request->priority);
         }
 
-        // Search by title
-        if ($request->filled('search')) {
-            $query->where('title', 'like', '%' . $request->search . '%');
-        }
+        $tasks = $query->orderByRaw('due_date IS NULL, due_date ASC')->paginate(15);
 
-        $tasks = $query->orderByRaw('due_date IS NULL, due_date ASC')->paginate(10)->withQueryString();
-
-        return view('tasks.index', compact('tasks'));
+        return response()->json([
+            'success' => true,
+            'data'    => $tasks,
+        ]);
     }
 
     /**
-     * Show the form for creating a new task.
-     */
-    public function create()
-    {
-        $users = User::orderBy('name')->get();
-        return view('tasks.create', compact('users'));
-    }
-
-    /**
-     * Store a newly created task.
+     * POST /api/tasks
+     * Create a new task (admin only).
      */
     public function store(Request $request)
     {
+        /** @var User $user */
+        $user = Auth::user();
+
+        if ($user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can create tasks.',
+            ], 403);
+        }
+
         $validated = $request->validate([
             'title'       => 'required|string|max:255',
             'description' => 'nullable|string',
             'status'      => 'required|in:pending,in_progress,completed',
             'priority'    => 'required|in:low,medium,high',
             'assigned_to' => 'nullable|exists:users,id',
-            'due_date'    => 'nullable|date|after_or_equal:today',
+            'due_date'    => 'nullable|date',
         ]);
 
-        $validated['created_by'] = Auth::id();
-
+        $validated['created_by'] = $user->id;
         $task = Task::create($validated);
 
-        // Send email notification to assigned user
         if ($task->assigned_to) {
             $assignedUser = User::find($task->assigned_to);
             if ($assignedUser) {
                 try {
                     $assignedUser->notify(new TaskAssigned($task));
                 } catch (\Exception $e) {
-                    // Log but don't fail if mail is down
                     logger()->warning('TaskAssigned notification failed: ' . $e->getMessage());
                 }
             }
         }
 
-        return redirect()->route('tasks.index')
-            ->with('success', 'Task "' . $task->title . '" created successfully.');
+        $task->load(['assignedTo:id,name,email', 'createdBy:id,name,email']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task created successfully.',
+            'data'    => $task,
+        ], 201);
     }
 
     /**
-     * Display the specified task.
+     * GET /api/tasks/{task}
+     * Show a single task.
      */
     public function show(Task $task)
     {
         /** @var User $user */
         $user = Auth::user();
 
-        // Non-admins can only view their own tasks
-        // Use loose comparison: assigned_to is an int in DB, $user->id is int — safe.
-        // But when task is unassigned (null), null !== int is true, so also handle that.
         if ($user->role !== 'admin' && (int) $task->assigned_to !== (int) $user->id) {
-            abort(403, 'You do not have permission to view this task.');
+            return response()->json([
+                'success' => false,
+                'message' => 'Access denied.',
+            ], 403);
         }
 
-        $task->load(['assignedTo', 'createdBy', 'files.uploadedBy']);
+        $task->load(['assignedTo:id,name,email', 'createdBy:id,name,email', 'files']);
 
-        return view('tasks.show', compact('task'));
+        return response()->json([
+            'success' => true,
+            'data'    => $task,
+        ]);
     }
 
     /**
-     * Show the form for editing the specified task.
-     */
-    public function edit(Task $task)
-    {
-        $users = User::orderBy('name')->get();
-        $task->load('assignedTo');
-        return view('tasks.edit', compact('task', 'users'));
-    }
-
-    /**
-     * Update the specified task.
+     * PUT/PATCH /api/tasks/{task}
+     * Update a task.
      */
     public function update(Request $request, Task $task)
     {
@@ -128,12 +124,11 @@ class TaskController extends Controller
         $user = Auth::user();
 
         if ($user->role === 'admin') {
-            // Admin can update everything
             $validated = $request->validate([
-                'title'       => 'required|string|max:255',
+                'title'       => 'sometimes|required|string|max:255',
                 'description' => 'nullable|string',
-                'status'      => 'required|in:pending,in_progress,completed',
-                'priority'    => 'required|in:low,medium,high',
+                'status'      => 'sometimes|required|in:pending,in_progress,completed',
+                'priority'    => 'sometimes|required|in:low,medium,high',
                 'assigned_to' => 'nullable|exists:users,id',
                 'due_date'    => 'nullable|date',
             ]);
@@ -141,7 +136,6 @@ class TaskController extends Controller
             $previousAssignee = $task->assigned_to;
             $task->update($validated);
 
-            // Notify new assignee if changed
             if (
                 isset($validated['assigned_to']) &&
                 (int) $validated['assigned_to'] !== (int) $previousAssignee &&
@@ -157,10 +151,11 @@ class TaskController extends Controller
                 }
             }
         } else {
-            // Regular users can only update the status
-            // Cast both sides to int to avoid type-mismatch false positives
             if ((int) $task->assigned_to !== (int) $user->id) {
-                abort(403, 'You do not have permission to update this task.');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Access denied.',
+                ], 403);
             }
 
             $validated = $request->validate([
@@ -170,19 +165,36 @@ class TaskController extends Controller
             $task->update($validated);
         }
 
-        return redirect()->route('tasks.show', $task)
-            ->with('success', 'Task updated successfully.');
+        $task->refresh()->load(['assignedTo:id,name,email', 'createdBy:id,name,email']);
+
+        return response()->json([
+            'success' => true,
+            'message' => 'Task updated successfully.',
+            'data'    => $task,
+        ]);
     }
 
     /**
-     * Remove the specified task.
+     * DELETE /api/tasks/{task}
+     * Delete a task (admin only).
      */
     public function destroy(Task $task)
     {
-        $title = $task->title;
+        /** @var User $user */
+        $user = Auth::user();
+
+        if ($user->role !== 'admin') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Only admins can delete tasks.',
+            ], 403);
+        }
+
         $task->delete();
 
-        return redirect()->route('tasks.index')
-            ->with('success', "Task \"{$title}\" deleted.");
+        return response()->json([
+            'success' => true,
+            'message' => 'Task deleted successfully.',
+        ]);
     }
 }

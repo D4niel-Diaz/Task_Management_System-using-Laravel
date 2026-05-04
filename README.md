@@ -1,58 +1,53 @@
-<p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
+# Task Management System
 
-<p align="center">
-<a href="https://github.com/laravel/framework/actions"><img src="https://github.com/laravel/framework/workflows/tests/badge.svg" alt="Build Status"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/dt/laravel/framework" alt="Total Downloads"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/v/laravel/framework" alt="Latest Stable Version"></a>
-<a href="https://packagist.org/packages/laravel/framework"><img src="https://img.shields.io/packagist/l/laravel/framework" alt="License"></a>
-</p>
+Group 2 project portfolio system built with Laravel. It follows the sample Student Management System concepts and adapts them to task records, authentication, role-based access, file handling, email notification, and RESTful API routes.
 
-## About Laravel
+## Features
 
-Laravel is a web application framework with expressive, elegant syntax. We believe development must be an enjoyable and creative experience to be truly fulfilling. Laravel takes the pain out of development by easing common tasks used in many web projects, such as:
+- Authentication with Admin and User roles.
+- Admin task CRUD: create, list, edit, update, and delete tasks.
+- User task access: users can view assigned tasks and update their own task status.
+- Form validation for login, registration, task forms, status updates, and file uploads.
+- Task attachments stored on the public filesystem disk with filename, type, size, and uploader metadata.
+- Email notifications when a task is assigned during creation or reassignment.
+- RESTful API endpoints for tasks and attachments using `GET`, `POST`, `PUT/PATCH`, and `DELETE`.
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
-
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
-
-## Learning Laravel
-
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and video tutorial library of all modern web application frameworks, making it a breeze to get started with the framework.
-
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a range of topics including Laravel, modern PHP, unit testing, and JavaScript. Boost your skills by digging into our comprehensive video library.
-
-You can also watch bite-sized lessons with real-world projects on [Laravel Learn](https://laravel.com/learn), where you will be guided through building a Laravel application from scratch while learning PHP fundamentals.
-
-## Agentic Development
-
-Laravel's predictable structure and conventions make it ideal for AI coding agents like Claude Code, Cursor, and GitHub Copilot. Install [Laravel Boost](https://laravel.com/docs/ai) to supercharge your AI workflow:
+## Local Setup
 
 ```bash
-composer require laravel/boost --dev
-
-php artisan boost:install
+composer install
+npm install
+copy .env.example .env
+php artisan key:generate
+php artisan migrate --seed
+php artisan storage:link
+npm run build
+php artisan serve
 ```
 
-Boost provides your agent 15+ tools and skills that help agents build Laravel applications while following best practices.
+Default seeded accounts:
 
-## Contributing
+- Admin: `admin@taskmanager.test` / `password`
+- User: `user@taskmanager.test` / `password`
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+## API Usage
 
-## Code of Conduct
+API routes are under `/api` and use HTTP Basic authentication with the same email and password accounts.
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+- `GET /api/tasks`
+- `POST /api/tasks`
+- `GET /api/tasks/{task}`
+- `PUT /api/tasks/{task}`
+- `PATCH /api/tasks/{task}`
+- `DELETE /api/tasks/{task}`
+- `POST /api/tasks/{task}/files`
+- `GET /api/tasks/{task}/files/{file}`
+- `DELETE /api/tasks/{task}/files/{file}`
 
-## Security Vulnerabilities
+## Deployment Notes
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities will be promptly addressed.
-
-## License
-
-The Laravel framework is open-sourced software licensed under the [MIT license](https://opensource.org/licenses/MIT).
+- Set production database, mail, and `APP_URL` values in `.env`.
+- Run `php artisan migrate --force` during deployment.
+- Run `php artisan storage:link` so uploaded files can be downloaded.
+- Use `MAIL_MAILER=log` for local testing or SMTP/Mailtrap credentials for real email delivery.
+- Keep `APP_DEBUG=false` in production.
