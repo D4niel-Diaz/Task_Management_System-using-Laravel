@@ -126,3 +126,7 @@ class DatabaseSeeder extends Seeder
         }
     }
 }
+// Default seeded accounts:
+
+//- Admin: `admin@taskmanager.test` / `password`
+//- User: `user@taskmanager.test` / `password`
