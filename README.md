@@ -25,10 +25,7 @@ npm run build
 php artisan serve
 ```
 
-Default seeded accounts:
 
-- Admin: `admin@taskmanager.test` / `password`
-- User: `user@taskmanager.test` / `password`
 
 ## API Usage
 
