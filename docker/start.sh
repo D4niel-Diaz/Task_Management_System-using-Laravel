@@ -15,11 +15,11 @@ php artisan storage:link --force >/dev/null 2>&1 || true
 php artisan config:cache --no-interaction
 php artisan view:cache --no-interaction
 
-if [ "${RUN_MIGRATIONS:-false}" = "true" ]; then
+if [ "${RUN_MIGRATIONS:-true}" = "true" ]; then
   php artisan migrate --force --no-interaction
 fi
 
-if [ "${RUN_SEEDERS:-false}" = "true" ]; then
+if [ "${RUN_SEEDERS:-true}" = "true" ]; then
   php artisan db:seed --force --no-interaction
 fi
 
