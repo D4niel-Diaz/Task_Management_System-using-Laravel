@@ -1,0 +1,7 @@
+<table role="presentation" cellpadding="0" cellspacing="0" style="margin:24px 0;">
+    <tr>
+        <td style="border-radius:12px;background:#2563eb;">
+            <a href="{{ $url }}" style="display:inline-block;padding:13px 20px;color:#ffffff;text-decoration:none;font-weight:700;border-radius:12px;">{{ $label }}</a>
+        </td>
+    </tr>
+</table>
