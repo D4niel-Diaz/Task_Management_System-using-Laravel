@@ -1,55 +1,47 @@
-# Use official PHP 8.2 CLI image
-FROM php:8.2-cli
+FROM composer:2 AS vendor
+WORKDIR /app
 
-# Install system dependencies
-RUN apt-get update && apt-get install -y \
-    libpng-dev \
-    libonig-dev \
-    libxml2-dev \
-    zip \
-    unzip \
-    git \
-    curl \
-    libpq-dev \
-    sqlite3 \
-    libsqlite3-dev \
-    && docker-php-ext-install pdo pdo_pgsql pdo_mysql pdo_sqlite mbstring bcmath gd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --prefer-dist \
+    --optimize-autoloader \
+    --no-scripts
 
-# Install Composer
-COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY . .
+RUN composer dump-autoload --optimize --no-dev
 
-# Set working directory
+FROM node:22-alpine AS assets
+WORKDIR /app
+
+COPY package.json package-lock.json ./
+RUN npm ci
+
+COPY resources ./resources
+COPY public ./public
+COPY vite.config.js ./
+RUN npm run build
+
+FROM php:8.4-cli-alpine AS app
 WORKDIR /var/www/html
 
-# Copy composer files first (better layer caching)
-COPY composer.json composer.lock ./
-RUN composer install --no-interaction --optimize-autoloader --no-dev --no-scripts
+RUN apk add --no-cache bash icu-libs libzip oniguruma \
+    && apk add --no-cache --virtual .build-deps icu-dev libzip-dev oniguruma-dev \
+    && docker-php-ext-install intl mbstring pdo_mysql zip \
+    && apk del .build-deps
 
-# Copy rest of the project
-COPY . .
+COPY --from=vendor /app /var/www/html
+COPY --from=assets /app/public/build /var/www/html/public/build
+COPY docker/start.sh /usr/local/bin/start
 
-# Re-run composer scripts after full copy
-RUN composer dump-autoload --optimize
+RUN chmod +x /usr/local/bin/start \
+    && mkdir -p storage/app/public storage/framework/cache/data storage/framework/sessions storage/framework/views storage/logs bootstrap/cache \
+    && chown -R www-data:www-data storage bootstrap/cache
 
-# Create required Laravel directories
-RUN mkdir -p storage/framework/{cache,data,sessions,views} bootstrap/cache \
-    && chmod -R 775 storage bootstrap/cache
+USER www-data
 
-# Create startup script
-RUN echo '#!/bin/sh\n\
-set -e\n\
-echo "==> Caching config..."\n\
-php artisan config:clear\n\
-echo "==> Running migrations..."\n\
-php artisan migrate --force\n\
-echo "==> Seeding admin user..."\n\
-php artisan db:seed --class=AdminSeeder --force\n\
-echo "==> Starting server on port ${PORT:-8080}..."\n\
-php -S 0.0.0.0:${PORT:-8080} -t public\n\
-' > /start.sh && chmod +x /start.sh
+EXPOSE 8000
 
-# Expose Render port
-EXPOSE 8080
-
-CMD ["/start.sh"]
+CMD ["start"]
