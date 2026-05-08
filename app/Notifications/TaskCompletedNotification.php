@@ -3,15 +3,16 @@
 namespace App\Notifications;
 
 use App\Models\Task;
+use App\Models\User;
 use Illuminate\Bus\Queueable;
 use Illuminate\Notifications\Messages\MailMessage;
 use Illuminate\Notifications\Notification;
 
-class TaskAssigned extends Notification
+class TaskCompletedNotification extends Notification
 {
     use Queueable;
 
-    public function __construct(protected Task $task) {}
+    public function __construct(protected Task $task, protected ?User $actor = null) {}
 
     public function via(object $notifiable): array
     {
@@ -21,18 +22,11 @@ class TaskAssigned extends Notification
     public function toMail(object $notifiable): MailMessage
     {
         return (new MailMessage)
-            ->subject('New Task Assigned: ' . $this->task->title)
-            ->view('emails.task-assigned', [
+            ->subject('Task Completed: ' . $this->task->title)
+            ->view('emails.task-completed', [
                 'task' => $this->task,
+                'actor' => $this->actor,
                 'user' => $notifiable,
             ]);
-    }
-
-    public function toArray(object $notifiable): array
-    {
-        return [
-            'task_id'    => $this->task->id,
-            'task_title' => $this->task->title,
-        ];
     }
 }

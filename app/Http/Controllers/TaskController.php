@@ -5,6 +5,7 @@ namespace App\Http\Controllers;
 use App\Models\Task;
 use App\Models\User;
 use App\Notifications\TaskAssigned;
+use App\Notifications\TaskCompletedNotification;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 
@@ -98,7 +99,7 @@ class TaskController extends Controller
         $user = Auth::user();
 
         // Non-admins can only view their own tasks
-        // Use loose comparison: assigned_to is an int in DB, $user->id is int — safe.
+        // Use loose comparison: assigned_to is an int in DB, $user->id is int - safe.
         // But when task is unassigned (null), null !== int is true, so also handle that.
         if ($user->role !== 'admin' && (int) $task->assigned_to !== (int) $user->id) {
             abort(403, 'You do not have permission to view this task.');
@@ -139,6 +140,7 @@ class TaskController extends Controller
             ]);
 
             $previousAssignee = $task->assigned_to;
+            $previousStatus = $task->status;
             $task->update($validated);
 
             // Notify new assignee if changed
@@ -156,6 +158,8 @@ class TaskController extends Controller
                     }
                 }
             }
+
+            $this->sendTaskCompletedNotification($task->fresh(['assignedTo', 'createdBy']), $user, $previousStatus);
         } else {
             // Regular users can only update the status
             // Cast both sides to int to avoid type-mismatch false positives
@@ -167,11 +171,33 @@ class TaskController extends Controller
                 'status' => 'required|in:pending,in_progress,completed',
             ]);
 
+            $previousStatus = $task->status;
             $task->update($validated);
+            $this->sendTaskCompletedNotification($task->fresh(['assignedTo', 'createdBy']), $user, $previousStatus);
         }
 
         return redirect()->route('tasks.show', $task)
             ->with('success', 'Task updated successfully.');
+    }
+
+    private function sendTaskCompletedNotification(Task $task, User $actor, string $previousStatus): void
+    {
+        if ($previousStatus === 'completed' || $task->status !== 'completed') {
+            return;
+        }
+
+        $recipients = collect([$task->createdBy, $task->assignedTo])
+            ->filter()
+            ->unique('id')
+            ->reject(fn (User $recipient) => (int) $recipient->id === (int) $actor->id);
+
+        foreach ($recipients as $recipient) {
+            try {
+                $recipient->notify(new TaskCompletedNotification($task, $actor));
+            } catch (\Exception $e) {
+                logger()->warning('TaskCompleted notification failed: ' . $e->getMessage());
+            }
+        }
     }
 
     /**

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers;
 
+use App\Notifications\AccountActivityAlert;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Hash;
@@ -34,17 +35,32 @@ class ProfileController extends Controller
             'password'              => 'nullable|string|min:6|confirmed',
         ]);
 
+        $passwordChanged = false;
+        $originalEmail = $user->email;
+
         // If changing password, verify old one first
         if ($request->filled('password')) {
             if (!$request->filled('current_password') || !Hash::check($request->current_password, $user->password)) {
                 return back()->withErrors(['current_password' => 'Current password is incorrect.'])->withInput();
             }
             $user->password = Hash::make($validated['password']);
+            $passwordChanged = true;
         }
 
         $user->name  = $validated['name'];
         $user->email = $validated['email'];
         $user->save();
+
+        $activity = $passwordChanged
+            ? 'Your profile and password were updated successfully.'
+            : 'Your profile information was updated successfully.';
+
+        $this->notifyAccountActivity($request, $user, $activity, [
+            'timestamp' => now()->format('F j, Y h:i A T'),
+            'ip' => $request->ip(),
+            'email_changed' => $originalEmail !== $user->email ? 'Yes' : 'No',
+            'password_changed' => $passwordChanged ? 'Yes' : 'No',
+        ]);
 
         return back()->with('success', 'Profile updated successfully.');
     }
@@ -78,6 +94,11 @@ class ProfileController extends Controller
         $user->profile_photo = $path;
         $user->save();
 
+        $this->notifyAccountActivity($request, $user, 'Your profile photo was updated successfully.', [
+            'timestamp' => now()->format('F j, Y h:i A T'),
+            'ip' => $request->ip(),
+        ]);
+
         return back()->with('success', 'Profile photo updated successfully.');
     }
 
@@ -96,6 +117,22 @@ class ProfileController extends Controller
         $user->profile_photo = null;
         $user->save();
 
+        $this->notifyAccountActivity(request(), $user, 'Your profile photo was removed successfully.', [
+            'timestamp' => now()->format('F j, Y h:i A T'),
+            'ip' => request()->ip(),
+        ]);
+
         return back()->with('success', 'Profile photo removed.');
+    }
+
+    private function notifyAccountActivity(Request $request, $user, string $activity, array $details): void
+    {
+        $details['browser'] = $request->userAgent() ?: 'Unavailable';
+
+        try {
+            $user->notify(new AccountActivityAlert($activity, $details));
+        } catch (\Exception $e) {
+            logger()->warning('AccountActivity notification failed: ' . $e->getMessage());
+        }
     }
 }
