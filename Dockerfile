@@ -27,9 +27,9 @@ RUN npm run build
 FROM php:8.4-cli-alpine AS app
 WORKDIR /var/www/html
 
-RUN apk add --no-cache bash icu-libs libzip oniguruma \
-    && apk add --no-cache --virtual .build-deps icu-dev libzip-dev oniguruma-dev \
-    && docker-php-ext-install intl mbstring pdo_mysql zip \
+RUN apk add --no-cache bash icu-libs libpq libzip oniguruma \
+    && apk add --no-cache --virtual .build-deps icu-dev libzip-dev oniguruma-dev postgresql-dev \
+    && docker-php-ext-install intl mbstring pdo_mysql pdo_pgsql zip \
     && apk del .build-deps
 
 COPY --from=vendor /app /var/www/html
